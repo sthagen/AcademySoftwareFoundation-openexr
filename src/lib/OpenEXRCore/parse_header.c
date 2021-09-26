@@ -72,7 +72,10 @@ scratch_seq_read (struct _internal_exr_seq_scratch* scr, void* buf, uint64_t sz)
                 outbuf += nread;
                 nCopied += (uint64_t) nread;
             }
-            if (nread <= 0) break;
+            else
+            {
+                break;
+            }
         }
         else
         {
@@ -91,6 +94,11 @@ scratch_seq_read (struct _internal_exr_seq_scratch* scr, void* buf, uint64_t sz)
             }
             else
             {
+                if (nread == 0)
+                    rv = scr->ctxt->report_error (
+                        scr->ctxt,
+                        EXR_ERR_READ_IO,
+                        "End of file attempting to read header");
                 break;
             }
         }
@@ -218,6 +226,8 @@ read_text (
     }
     *outlen = namelen;
     if (namelen > maxlen)
+    {
+        text[maxlen - 1] = '\0';
         return ctxt->print_error (
             ctxt,
             EXR_ERR_NAME_TOO_LONG,
@@ -225,6 +235,7 @@ read_text (
             type,
             text,
             maxlen);
+    }
     return EXR_ERR_SUCCESS;
 }
 
@@ -422,6 +433,8 @@ extract_attr_float_vector (
 
     if (rv == EXR_ERR_SUCCESS && n > 0)
     {
+        /* in case of duplicate attr name in header (mostly fuzz testing) */
+        exr_attr_float_vector_destroy ((exr_context_t) ctxt, attrdata);
         rv = exr_attr_float_vector_init ((exr_context_t) ctxt, attrdata, n);
         if (rv != EXR_ERR_SUCCESS) return rv;
 
@@ -561,14 +574,17 @@ extract_attr_string_vector (
         pulled += nlen;
     }
 
+    // just in case someone injected a duplicate attribute name into the header
+    exr_attr_string_vector_destroy ((exr_context_t) ctxt, attrdata);
     attrdata->n_strings  = nstr;
     attrdata->alloc_size = nalloced;
     attrdata->strings    = clist;
-    return 0;
+    return EXR_ERR_SUCCESS;
 extract_string_vector_fail:
     for (int32_t i = 0; i < nstr; ++i)
         exr_attr_string_destroy ((exr_context_t) ctxt, clist + i);
     if (clist) ctxt->free_fn (clist);
+
     return rv;
 }
 
@@ -639,6 +655,7 @@ extract_attr_opaque (
     rv = check_bad_attrsz (ctxt, attrsz, 1, aname, tname, &n);
     if (rv != EXR_ERR_SUCCESS) return rv;
 
+    exr_attr_opaquedata_destroy ((exr_context_t) ctxt, attrdata);
     rv = exr_attr_opaquedata_init (
         (exr_context_t) ctxt, attrdata, (uint64_t) attrsz);
     if (rv != EXR_ERR_SUCCESS) return rv;
@@ -715,6 +732,7 @@ extract_attr_preview (
             sz[1]);
     }
 
+    exr_attr_preview_destroy ((exr_context_t) ctxt, attrdata);
     rv = exr_attr_preview_init ((exr_context_t) ctxt, attrdata, sz[0], sz[1]);
     if (rv != EXR_ERR_SUCCESS) return rv;
 
@@ -772,6 +790,7 @@ check_populate_channels (
         0,
         NULL,
         &(curpart->channels));
+
     if (rv != EXR_ERR_SUCCESS)
     {
         exr_attr_chlist_destroy ((exr_context_t) ctxt, &tmpchans);
@@ -782,6 +801,7 @@ check_populate_channels (
             EXR_REQ_CHANNELS_STR);
     }
 
+    exr_attr_chlist_destroy ((exr_context_t) ctxt, curpart->channels->chlist);
     *(curpart->channels->chlist) = tmpchans;
     return rv;
 }
@@ -1424,14 +1444,14 @@ check_populate_type (
         curpart->storage_mode = EXR_STORAGE_DEEP_TILED;
     else
     {
-        exr_attr_list_remove (
-            (exr_context_t) ctxt, &(curpart->attributes), curpart->type);
-        curpart->type = NULL;
-        return ctxt->print_error (
+        rv = ctxt->print_error (
             ctxt,
             EXR_ERR_INVALID_ATTR,
             "attribute 'type': Invalid type string '%s'",
             outstr);
+        exr_attr_list_remove (
+            (exr_context_t) ctxt, &(curpart->attributes), curpart->type);
+        curpart->type = NULL;
     }
 
     return rv;

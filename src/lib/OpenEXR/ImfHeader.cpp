@@ -45,6 +45,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <cmath>
+#include <zlib.h>
+#include <atomic>
 
 #include "ImfTiledMisc.h"
 #include "ImfNamespace.h"
@@ -60,8 +62,147 @@ using IMATH_NAMESPACE::Box2i;
 using IMATH_NAMESPACE::V2i;
 using IMATH_NAMESPACE::V2f;
 
+namespace
+{
 
-namespace {
+static int   s_DefaultZipCompressionLevel = Z_DEFAULT_COMPRESSION;
+static float s_DefaultDwaCompressionLevel = 45.f;
+
+struct CompressionRecord
+{
+    CompressionRecord()
+        : zip_level (s_DefaultZipCompressionLevel),
+          dwa_level (s_DefaultDwaCompressionLevel)
+    {}
+    int zip_level;
+    float dwa_level;
+};
+// NB: This is extra complicated than one would normally write to
+// handle scenario that seems to happen on MacOS/Windows (probably
+// linux too, but unobserved) with a static library, where a
+// (static/global) Header is being destroyed after the shutdown of
+// this translation unit happens, causing use after destroy.
+//
+// but if we just use the once_flag / call_once mechanism, windows
+// then starts crashing on exit in a different way.
+
+struct CompressionStash;
+// assignments to here happen in static singleton ctor which is
+// guaranteed construction safe.
+//
+// we could potentially solve with using an atomic shared ptr instead
+// of needing the ctor/dtor and getstash thing, but gcc 4.8 does not
+// include proper support for those.
+static std::atomic<CompressionStash *> s_stash {nullptr};
+
+struct CompressionStash
+{
+    CompressionStash()
+    {
+        s_stash.store( this );
+    }
+    ~CompressionStash()
+    {
+        // technically not safe in that if there are multiple threads
+        // running at object destruction time, another thread may have
+        // retrieved the pointer, but not yet entered the mutex, but
+        // then we run, destroying the mutex, and then they crash
+        // against a destroyed mutex. But this code only happens at
+        // static object destruction time, and only has
+        // non-deterministic behavior when compiled statically.
+        // so. this is about all we can do to add this feature without
+        // changing the abi other than say don't have static/global
+        // Header objects?
+        s_stash.store( nullptr );
+#if ILMTHREAD_THREADING_ENABLED
+        // let's explicitly grab the lock and clear the map in case
+        // there is someone waiting on a lock concurrently at static
+        // destruction time, just to be pedantic
+        _mutex.lock();
+        _store.clear();
+        _mutex.unlock();
+#endif
+    }
+#if ILMTHREAD_THREADING_ENABLED
+    std::mutex _mutex;
+#endif
+    std::map<const void *, CompressionRecord> _store;
+};
+
+static CompressionStash *getStash()
+{
+    static CompressionStash stash_impl;
+    return s_stash.load();
+}
+
+static void clearCompressionRecord (Header *hdr)
+{
+    CompressionStash *s = getStash();
+    if ( s )
+    {
+#if ILMTHREAD_THREADING_ENABLED
+        std::lock_guard<std::mutex> lk (s->_mutex);
+#endif
+        auto i = s->_store.find (hdr);
+        if (i != s->_store.end ())
+            s->_store.erase (i);
+    }
+}
+
+static CompressionRecord retrieveCompressionRecord (const Header *hdr)
+{
+    CompressionRecord retval;
+
+    CompressionStash *s = getStash();
+    if ( s )
+    {
+#if ILMTHREAD_THREADING_ENABLED
+        std::lock_guard<std::mutex> lk (s->_mutex);
+#endif
+        auto i = s->_store.find (hdr);
+        if (i != s->_store.end ())
+            retval = i->second;
+    }
+    return retval;
+}
+
+static CompressionRecord &retrieveCompressionRecord (Header *hdr)
+{
+    CompressionStash *s = getStash();
+    if ( s )
+    {
+#if ILMTHREAD_THREADING_ENABLED
+        std::lock_guard<std::mutex> lk (s->_mutex);
+#endif
+        return s->_store[hdr];
+    }
+    // this will only happen at app shutdown, so it'd be an invalid
+    // store anyway, but just return something to avoid a crash
+    static CompressionRecord defrec;
+    return defrec;
+}
+
+static void copyCompressionRecord (Header *dst, const Header *src)
+{
+    CompressionStash *s = getStash();
+    if ( s )
+    {
+#if ILMTHREAD_THREADING_ENABLED
+        std::lock_guard<std::mutex> lk (s->_mutex);
+#endif
+        auto i = s->_store.find (src);
+        if (i != s->_store.end ())
+        {
+            s->_store[dst] = i->second;
+        }
+        else
+        {
+            i = s->_store.find (dst);
+            if (i != s->_store.end())
+                s->_store.erase (i);
+        }
+    }
+};
 
 int maxImageWidth = 0;
 int maxImageHeight = 0;
@@ -119,16 +260,26 @@ sanityCheckDisplayWindow (int width, int height)
 
 } // namespace
 
+void setDefaultZipCompressionLevel (int level)
+{
+    s_DefaultZipCompressionLevel = level;
+}
 
-Header::Header (int width,
-		int height,
-		float pixelAspectRatio,
-		const V2f &screenWindowCenter,
-		float screenWindowWidth,
-		LineOrder lineOrder,
-		Compression compression)
-:
-    _map()
+void setDefaultDwaCompressionLevel (float level)
+{
+    s_DefaultDwaCompressionLevel = level;
+}
+
+Header::Header (
+    int         width,
+    int         height,
+    float       pixelAspectRatio,
+    const V2f&  screenWindowCenter,
+    float       screenWindowWidth,
+    LineOrder   lineOrder,
+    Compression compression)
+    : _map ()
+    , _readsNothing (false)
 {
     sanityCheckDisplayWindow (width, height);
 
@@ -146,17 +297,17 @@ Header::Header (int width,
 		compression);
 }
 
-
-Header::Header (int width,
-		int height,
-		const Box2i &dataWindow,
-		float pixelAspectRatio,
-		const V2f &screenWindowCenter,
-		float screenWindowWidth,
-		LineOrder lineOrder,
-		Compression compression)
-:
-    _map()
+Header::Header (
+    int          width,
+    int          height,
+    const Box2i& dataWindow,
+    float        pixelAspectRatio,
+    const V2f&   screenWindowCenter,
+    float        screenWindowWidth,
+    LineOrder    lineOrder,
+    Compression  compression)
+    : _map ()
+    , _readsNothing (false)
 {
     sanityCheckDisplayWindow (width, height);
 
@@ -174,16 +325,16 @@ Header::Header (int width,
 		compression);
 }
 
-
-Header::Header (const Box2i &displayWindow,
-		const Box2i &dataWindow,
-		float pixelAspectRatio,
-		const V2f &screenWindowCenter,
-		float screenWindowWidth,
-		LineOrder lineOrder,
-		Compression compression)
-:
-    _map()
+Header::Header (
+    const Box2i& displayWindow,
+    const Box2i& dataWindow,
+    float        pixelAspectRatio,
+    const V2f&   screenWindowCenter,
+    float        screenWindowWidth,
+    LineOrder    lineOrder,
+    Compression  compression)
+    : _map ()
+    , _readsNothing (false)
 {
     staticInitialize();
 
@@ -197,8 +348,9 @@ Header::Header (const Box2i &displayWindow,
 		compression);
 }
 
-
-Header::Header (const Header &other): _map()
+Header::Header (const Header& other)
+    : _map ()
+    , _readsNothing (other._readsNothing)
 {
     for (AttributeMap::const_iterator i = other._map.begin();
 	 i != other._map.end();
@@ -208,6 +360,10 @@ Header::Header (const Header &other): _map()
     }
 }
 
+Header::Header (Header&& other)
+    : _map (std::move (other._map))
+    , _readsNothing (other._readsNothing)
+{}
 
 Header::~Header ()
 {
@@ -217,34 +373,47 @@ Header::~Header ()
     {
 	 delete i->second;
     }
+    clearCompressionRecord (this);
 }
 
-
-Header &		
-Header::operator = (const Header &other)
+Header&
+Header::operator= (const Header& other)
 {
     if (this != &other)
     {
-	for (AttributeMap::iterator i = _map.begin();
-	     i != _map.end();
-	     ++i)
-	{
-	     delete i->second;
-	}
+        for (AttributeMap::iterator i = _map.begin (); i != _map.end (); ++i)
+        {
+            delete i->second;
+        }
 
-	_map.erase (_map.begin(), _map.end());
+        _map.clear ();
 
-	for (AttributeMap::const_iterator i = other._map.begin();
-	     i != other._map.end();
-	     ++i)
-	{
-	    insert (*i->first, *i->second);
-	}
+        for (AttributeMap::const_iterator i = other._map.begin ();
+             i != other._map.end ();
+             ++i)
+        {
+            insert (*i->first, *i->second);
+        }
+        copyCompressionRecord (this, &other);
+        _readsNothing        = other._readsNothing;
     }
 
     return *this;
 }
 
+Header&
+Header::operator= (Header&& other)
+{
+    if (this != &other)
+    {
+        std::swap (_map, other._map);
+        // don't have to move or anything as it's pod types
+        copyCompressionRecord (this, &other);
+        _readsNothing        = other._readsNothing;
+    }
+
+    return *this;
+}
 
 void
 Header::erase (const char name[])
@@ -274,6 +443,12 @@ Header::insert (const char name[], const Attribute &attribute)
 	THROW (IEX_NAMESPACE::ArgExc, "Image attribute name cannot be an empty string.");
 
     AttributeMap::iterator i = _map.find (name);
+    if (!strcmp (name, "dwaCompressionLevel"))
+    {
+        const TypedAttribute<float>& dwaattr =
+            dynamic_cast<const TypedAttribute<float>&> (attribute);
+        dwaCompressionLevel() = dwaattr.value ();
+    }
 
     if (i == _map.end())
     {
@@ -532,6 +707,35 @@ Header::compression () const
 	((*this)["compression"]).value();
 }
 
+void
+Header::resetDefaultCompressionLevels ()
+{
+    clearCompressionRecord (this);
+}
+
+int&
+Header::zipCompressionLevel ()
+{
+    return retrieveCompressionRecord (this).zip_level;
+}
+
+int
+Header::zipCompressionLevel () const
+{
+    return retrieveCompressionRecord (this).zip_level;
+}
+
+float&
+Header::dwaCompressionLevel ()
+{
+    return retrieveCompressionRecord (this).dwa_level;
+}
+
+float
+Header::dwaCompressionLevel () const
+{
+    return retrieveCompressionRecord (this).dwa_level;
+}
 
 void
 Header::setName(const string& name)
