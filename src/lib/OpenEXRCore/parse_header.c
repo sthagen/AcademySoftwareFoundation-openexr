@@ -720,7 +720,7 @@ extract_attr_preview (
             sz[0],
             sz[1]);
 
-    if (fsize > 0 && bytes >= (uint64_t) fsize)
+    if (bytes == 0 || (fsize > 0 && bytes >= (uint64_t) fsize))
     {
         return ctxt->print_error (
             ctxt,
@@ -1949,7 +1949,7 @@ static int64_t
 calc_level_size (int mind, int maxd, int level, exr_tile_round_mode_t rounding)
 {
     int64_t dsize   = (int64_t) maxd - (int64_t) mind + 1;
-    int     b       = (1 << level);
+    int64_t b       = ( (int64_t) 1) << level;
     int64_t retsize = dsize / b;
 
     if (rounding == EXR_TILE_ROUND_UP && retsize * b < dsize) retsize += 1;
@@ -2202,7 +2202,7 @@ internal_exr_compute_chunk_offset_size (struct _internal_exr_part* curpart)
         curpart->lines_per_chunk         = ((int16_t) linePerChunk);
         curpart->chan_has_line_sampling  = ((int16_t) hasLineSample);
 
-        h      = (uint64_t) dw.max.y - (uint64_t) dw.min.y + 1;
+        h      = (uint64_t) ((int64_t) dw.max.y - (int64_t) dw.min.y + 1);
         retval = (int32_t) ((h + linePerChunk - 1) / linePerChunk);
     }
     return retval;
