@@ -151,11 +151,17 @@ validate_image_dimensions (
     /* isnormal will return true when par is 0, which should also be disallowed */
     if (!isnormal (par) || par < 1e-6f || par > 1e+6f)
         return f->print_error (
-            f, EXR_ERR_INVALID_ATTR, "Invalid pixel aspect ratio %g", (double)par);
+            f,
+            EXR_ERR_INVALID_ATTR,
+            "Invalid pixel aspect ratio %g",
+            (double) par);
 
     if (sww < 0.f)
         return f->print_error (
-            f, EXR_ERR_INVALID_ATTR, "Invalid screen window width %g", (double)sww);
+            f,
+            EXR_ERR_INVALID_ATTR,
+            "Invalid screen window width %g",
+            (double) sww);
 
     return EXR_ERR_SUCCESS;
 }
@@ -182,9 +188,13 @@ validate_channels (
             EXR_ERR_NO_ATTR_BY_NAME,
             "request to validate channel list, but data window not set to validate against");
 
+    if (channels->num_channels <= 0)
+        return f->report_error (
+            f, EXR_ERR_FILE_BAD_HEADER, "At least one channel required");
+
     dw = curpart->data_window;
-    w  = dw.max.x - dw.min.x + 1;
-    h  = dw.max.y - dw.min.y + 1;
+    w  = (int64_t) dw.max.x - (int64_t) dw.min.x + 1;
+    h  = (int64_t) dw.max.y - (int64_t) dw.min.y + 1;
     for (int c = 0; c < channels->num_channels; ++c)
     {
         int32_t xsamp = channels->entries[c].x_sampling;
@@ -298,6 +308,8 @@ validate_tile_data (
         const int                  maxtilew = f->max_tile_w;
         const int                  maxtileh = f->max_tile_h;
         const exr_attr_chlist_t*   channels = curpart->channels->chlist;
+        exr_tile_level_mode_t      levmode;
+        exr_tile_round_mode_t      rndmode;
 
         if (!curpart->tiles)
             return f->print_error (
@@ -305,10 +317,13 @@ validate_tile_data (
                 EXR_ERR_MISSING_REQ_ATTR,
                 "'tiles' attribute for tiled file not found");
 
-        desc = curpart->tiles->tiledesc;
+        desc    = curpart->tiles->tiledesc;
+        levmode = EXR_GET_TILE_LEVEL_MODE (*desc);
+        rndmode = EXR_GET_TILE_ROUND_MODE (*desc);
+
         if (desc->x_size == 0 || desc->y_size == 0 ||
-            desc->x_size > (uint32_t) INT_MAX ||
-            desc->y_size > (uint32_t) INT_MAX)
+            desc->x_size > (uint32_t) (INT_MAX / 4) ||
+            desc->y_size > (uint32_t) (INT_MAX / 4))
             return f->print_error (
                 f,
                 EXR_ERR_INVALID_ATTR,
@@ -329,6 +344,22 @@ validate_tile_data (
                 "Width of tile exceeds max size (%d vs max %d)",
                 (int) desc->y_size,
                 maxtileh);
+
+        if ((int) levmode < EXR_TILE_ONE_LEVEL ||
+            (int) levmode >= EXR_TILE_LAST_TYPE)
+            return f->print_error (
+                f,
+                EXR_ERR_INVALID_ATTR,
+                "Invalid level mode (%d) in tile description header",
+                (int) levmode);
+
+        if ((int) rndmode < EXR_TILE_ROUND_DOWN ||
+            (int) rndmode >= EXR_TILE_ROUND_LAST_TYPE)
+            return f->print_error (
+                f,
+                EXR_ERR_INVALID_ATTR,
+                "Invalid rounding mode (%d) in tile description header",
+                (int) rndmode);
 
         for (int c = 0; c < channels->num_channels; ++c)
         {
