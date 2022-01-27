@@ -227,13 +227,6 @@ read_text (
     {
         rv = scratch->sequential_read (scratch, &b, 1);
         if (rv != EXR_ERR_SUCCESS) return rv;
-        if (b > 0 && (b > 126 || (b < ' ' && b != '\t')))
-        {
-            continue;
-            //return EXR_GETFILE(file)->print_error(
-            //    file, EXR_ERR_FILE_BAD_HEADER,
-            //    "Invalid non-printable character %d (0x%02X) encountered parsing attribute text", (int)b, (int)b );
-        }
         text[namelen] = b;
         if (b == '\0') break;
         ++namelen;
@@ -1688,19 +1681,9 @@ pull_attr (
     uint8_t*         strptr = NULL;
     const int32_t    maxlen = ctxt->max_name_length;
 
-    if (init_byte > 0 &&
-        (init_byte > 126 || (init_byte < ' ' && init_byte != '\t')))
-    {
-        namelen = 0;
-        //return EXR_GETFILE(f)->print_error(
-        //    f, EXR_ERR_FILE_BAD_HEADER,
-        //    "Invalid non-printable character %d (0x%02X) encountered parsing text", (int)init_byte, (int)init_byte );
-    }
-    else
-    {
-        name[0] = (char) init_byte;
-        namelen = 1;
-    }
+    name[0] = (char) init_byte;
+    namelen = 1;
+
     rv = read_text (ctxt, name, &namelen, maxlen, scratch, "attribute name");
     if (rv != EXR_ERR_SUCCESS) return rv;
     rv = read_text (ctxt, type, &typelen, maxlen, scratch, "attribute type");
@@ -2019,6 +2002,8 @@ internal_exr_compute_tile_information (
         w = ((int64_t) dw.max.x) - ((int64_t) dw.min.x) + 1;
         h = ((int64_t) dw.max.y) - ((int64_t) dw.min.y) + 1;
 
+        if (tiledesc->x_size == 0 || tiledesc->y_size == 0)
+            return ctxt->standard_error (ctxt, EXR_ERR_INVALID_ATTR);
         switch (EXR_GET_TILE_LEVEL_MODE ((*tiledesc)))
         {
             case EXR_TILE_ONE_LEVEL: numX = numY = 1; break;
@@ -2049,7 +2034,9 @@ internal_exr_compute_tile_information (
                 }
                 break;
             case EXR_TILE_LAST_TYPE:
-            default: return -1;
+            default:
+                return ctxt->standard_error (
+                    ctxt, EXR_ERR_INVALID_ATTR);
         }
 
         curpart->num_tile_levels_x = numX;
