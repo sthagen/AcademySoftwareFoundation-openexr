@@ -35,9 +35,14 @@
 #    include <atomic>
 using atomic_uintptr_t = std::atomic_uintptr_t;
 #else
-#    if defined __has_include
-#        if __has_include(<stdatomic.h>)
-#            define EXR_HAS_STD_ATOMICS 1
+/* msvc, from version 19.31, evaluate __has_include(<stdatomic.h>) to true but
+ * doesn't actually support it yet. Ignoring msvc for now, once we know minimal
+ * version supporting it, we can compare against _MSC_VER. */
+#    if !defined(_MSC_VER)
+#        if defined __has_include
+#            if __has_include(<stdatomic.h>)
+#                define EXR_HAS_STD_ATOMICS 1
+#            endif
 #        endif
 #    endif
 
@@ -89,8 +94,8 @@ struct _internal_exr_part
     exr_compression_t comp_type;
     exr_lineorder_t   lineorder;
 
-    int32_t  zip_compression_level;
-    float    dwa_compression_level;
+    int32_t zip_compression_level;
+    float   dwa_compression_level;
 
     int32_t  num_tile_levels_x;
     int32_t  num_tile_levels_y;
@@ -170,7 +175,7 @@ struct _internal_exr_context
     int max_tile_w;
     int max_tile_h;
 
-    int default_zip_level;
+    int   default_zip_level;
     float default_dwa_quality;
 
     void*                         real_user_data;

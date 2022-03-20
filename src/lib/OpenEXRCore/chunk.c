@@ -15,9 +15,12 @@
 /**************************************/
 
 /* for testing, we include a bunch of internal stuff into the unit tests which are in c++ */
-#if defined __has_include
-#    if __has_include(<stdatomic.h>)
-#        define EXR_HAS_STD_ATOMICS 1
+/* see internal_structs.h for details on the msvc guard. */
+#if !defined(_MSC_VER)
+#    if defined __has_include
+#        if __has_include(<stdatomic.h>)
+#            define EXR_HAS_STD_ATOMICS 1
+#        endif
 #    endif
 #endif
 
@@ -442,9 +445,7 @@ exr_read_scanline_chunk_info (
 
     if (cinfo->packed_size == 0 && cinfo->unpacked_size > 0)
         return pctxt->report_error (
-            pctxt,
-            EXR_ERR_INVALID_ARGUMENT,
-            "Invalid packed size of 0");
+            pctxt, EXR_ERR_INVALID_ARGUMENT, "Invalid packed size of 0");
     return EXR_ERR_SUCCESS;
 }
 
@@ -951,9 +952,7 @@ exr_read_tile_chunk_info (
 
     if (cinfo->packed_size == 0 && cinfo->unpacked_size > 0)
         return pctxt->report_error (
-            pctxt,
-            EXR_ERR_INVALID_ARGUMENT,
-            "Invalid packed size of 0");
+            pctxt, EXR_ERR_INVALID_ARGUMENT, "Invalid packed size of 0");
 
     return EXR_ERR_SUCCESS;
 }
@@ -1312,7 +1311,7 @@ exr_write_scanline_chunk_info (
 {
     exr_attr_box2i_t dw;
     int              lpc, miny, cidx;
-    exr_chunk_info_t nil = { 0 };
+    exr_chunk_info_t nil = {0};
 
     EXR_PROMOTE_LOCKED_CONTEXT_AND_PART_OR_ERROR (ctxt, part_index);
 
@@ -1415,7 +1414,7 @@ exr_write_tile_chunk_info (
     const exr_attr_tiledesc_t* tiledesc;
     int                        tilew, tileh;
     uint64_t                   unpacksize = 0;
-    exr_chunk_info_t           nil        = { 0 };
+    exr_chunk_info_t           nil        = {0};
 
     EXR_PROMOTE_LOCKED_CONTEXT_AND_PART_OR_ERROR (ctxt, part_index);
 
