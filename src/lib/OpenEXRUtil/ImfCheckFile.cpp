@@ -56,7 +56,7 @@ const int gMaxScanlinesToRead = 1 << 20;
 
 //
 // compute row stride appropriate to process files quickly
-// only used for the 'Rgba' interfaces, which read potentially non-existant channels
+// only used for the 'Rgba' interfaces, which read potentially non-existent channels
 //
 //
 
@@ -1249,7 +1249,7 @@ readCoreScanlinePart (
             for (int c = 0; c < decoder.channel_count; c++)
             {
                 exr_coding_channel_info_t& outc = decoder.channels[c];
-                // fake addr for default rouines
+                // fake addr for default routines
                 outc.decode_to_ptr     = (uint8_t*) 0x1000;
                 outc.user_pixel_stride = outc.user_bytes_per_element;
                 outc.user_line_stride  = outc.user_pixel_stride * width;
@@ -1398,7 +1398,7 @@ readCoreTiledPart (
                         {
                             exr_coding_channel_info_t& outc =
                                 decoder.channels[c];
-                            // fake addr for default rouines
+                            // fake addr for default routines
                             outc.decode_to_ptr = (uint8_t*) 0x1000 + bytes;
                             outc.user_pixel_stride =
                                 outc.user_bytes_per_element;

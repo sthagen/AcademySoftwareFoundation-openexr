@@ -63,7 +63,7 @@ FastHufDecoder::FastHufDecoder (
 
     //
     // The 'offset' table is the position (in sorted order) of the first id
-    // of a given code lenght. Array is indexed by code length, like base.
+    // of a given code length. Array is indexed by code length, like base.
     //
 
     uint64_t offset[MAX_CODE_LEN + 1];
@@ -264,7 +264,7 @@ FastHufDecoder::~FastHufDecoder ()
 // properly on BE.
 //
 // If you happen to have more obscure hardware, check that the
-// byte swapping in refill() is happening sensable, add an endian
+// byte swapping in refill() is happening sensible, add an endian
 // check if needed, and fix the preprocessor magic here.
 //
 
@@ -439,7 +439,7 @@ FastHufDecoder::buildTables (uint64_t* base, uint64_t* offset)
 // shift in 0's to bufferBack.
 //
 // The refill act takes numBits from the top of bufferBack and sticks
-// them in the bottom of buffer. If there arn't enough bits in bufferBack,
+// them in the bottom of buffer. If there aren't enough bits in bufferBack,
 // it gets refilled (to 64-bits) from the input bitstream.
 //
 
@@ -507,7 +507,7 @@ FastHufDecoder::refill (
     //
     // We can have cases where the previous shift of bufferBack is << 64 -
     // this is an undefined operation but tends to create just zeroes.
-    // so if we won't have any bits left, zero out bufferBack insetad of computing the shift
+    // so if we won't have any bits left, zero out bufferBack instead of computing the shift
     //
 
     if (bufferBackNumBits <= numBits) { bufferBack = 0; }
@@ -546,7 +546,7 @@ FastHufDecoder::readBits (
 // small-ish table to accelerate decoding of short codes.
 //
 // If possible, try looking up codes into the acceleration table.
-// This has a few benifits - there's no search involved; We don't
+// This has a few benefits - there's no search involved; We don't
 // need an additional lookup to map id to symbol; we don't need
 // a full 64-bits (so less refilling).
 //
@@ -669,7 +669,7 @@ FastHufDecoder::decode (
         bufferNumBits -= codeLen;
 
         //
-        // If we recieved a RLE symbol (_rleSymbol), then we need
+        // If we received a RLE symbol (_rleSymbol), then we need
         // to read ahead 8 bits to know how many times to repeat
         // the previous symbol. Need to ensure we at least have
         // 8 bits of data in the buffer

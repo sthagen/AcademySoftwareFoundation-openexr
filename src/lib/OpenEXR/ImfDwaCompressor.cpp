@@ -18,11 +18,11 @@
 // into the start of the data block, making a self-contained file.
 // If initializeDefaultChannelRules() doesn't quite suite your naming
 // conventions, you can adjust the rules without breaking decoder
-// compatability.
+// compatibility.
 //
 // If we're going to lossy compress R, G, or B channels, it's easier
 // to toss bits in a more perceptual uniform space. One could argue
-// at length as to what constitutes perceptually uniform, expecially
+// at length as to what constitutes perceptually uniform, especially
 // when storing either scene/input/focal plane referred and output referred
 // data.
 //
@@ -56,8 +56,8 @@
 // For each DCT component, we want to find a quantized value that
 // is within +- the per-component error. Pick the quantized value
 // that has the fewest bits set in its' binary representation.
-// Brute-forcing the search would make for extremly inefficient
-// compression. Fortunatly, we can precompute a table to assist
+// Brute-forcing the search would make for extremely inefficient
+// compression. Fortunately, we can precompute a table to assist
 // with this search.
 //
 // For each 16-bit float value, there are at most 15 other values with
@@ -148,7 +148,7 @@ namespace
 {
 
 //
-// Function pointer to dispatch to an approprate
+// Function pointer to dispatch to an appropriate
 // convertFloatToHalf64_* impl, based on runtime cpu checking.
 // Should be initialized in DwaCompressor::initializeFuncs()
 //
@@ -1160,7 +1160,7 @@ DwaCompressor::LossyDctDecoderBase::unRleAc (
     // high byte is 0xff, then insert the number of 0's
     // as indicated by the low byte.
     //
-    // Otherwise, just copy the number verbaitm.
+    // Otherwise, just copy the number verbatim.
     //
 
     int lastNonZero = 0;
@@ -1608,7 +1608,7 @@ DwaCompressor::LossyDctEncoderBase::quantize (half src, float errorTolerance)
 // differs from the jpeg EOB case, since EOB just indicates that
 // the rest of the block is zero. In our case, we have lots of
 // NaN symbols, which shouldn't be allowed to occur in DCT
-// coefficents - so we'll use them for encoding runs.
+// coefficients - so we'll use them for encoding runs.
 //
 // If the high byte is 0xff, then we have a run of 0's, of length
 // given by the low byte. For example, 0xff03 would be a run
@@ -1843,7 +1843,7 @@ DwaCompressor::compress (
 
     //
     // We might not be dealing with any color data, in which
-    // case the AC buffer size will be 0, and deferencing
+    // case the AC buffer size will be 0, and dereferencing
     // a vector will not be a good thing to do.
     //
 
@@ -2008,7 +2008,7 @@ DwaCompressor::compress (
 
                 //
                 // For RLE, bash the bytes up so that the first bytes of each
-                // pixel are contingous, as are the second bytes, and so on.
+                // pixel are contiguous, as are the second bytes, and so on.
                 //
 
                 for (unsigned int y = 0; y < rowPtrs[chan].size (); ++y)
@@ -2922,8 +2922,8 @@ DwaCompressor::initializeBuffers (size_t& outBufferSize)
         static_cast<uint64_t> (compressBound (static_cast<uLong> (unknownBufferSize)));
 
     //
-    // Allocate a zip/deflate compressor big enought to hold the DC data
-    // and include it's compressed results in the size requirements
+    // Allocate a zip/deflate compressor big enough to hold the DC data
+    // and include its compressed results in the size requirements
     // for our output buffer
     //
 
@@ -3161,7 +3161,7 @@ DwaCompressor::relevantChannelRules (std::vector<Classifier>& rules) const
 //
 // Take our initial list of channels, and cache the contents.
 //
-// Determine approprate compression schemes for each channel,
+// Determine appropriate compression schemes for each channel,
 // and figure out which sets should potentially be CSC'ed
 // prior to lossy compression.
 //

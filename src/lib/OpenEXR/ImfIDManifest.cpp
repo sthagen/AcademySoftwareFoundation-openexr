@@ -55,7 +55,7 @@ namespace
 // map of strings to index of string in table
 typedef std::map<std::string, int> indexedStringSet;
 
-// when handling vectors/sets of strings, the string is got by deferencing the pointer/iterator
+// when handling vectors/sets of strings, the string is got by dereferencing the pointer/iterator
 template <class T>
 size_t
 stringSize (const T& i)
@@ -358,7 +358,7 @@ IDManifest::init (const char* data, const char* endOfData)
 
     //
     // decode mapping table from indices in table to indices in string list
-    // the mapping uses smaller indices for more commonly occuring strings, since these are encoded with fewer bits
+    // the mapping uses smaller indices for more commonly occurring strings, since these are encoded with fewer bits
     // comments in serialize function describe the format
     //
 
