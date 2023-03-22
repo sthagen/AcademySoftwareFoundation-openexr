@@ -46,6 +46,10 @@
 #    define IMF_HAVE_NEON
 #endif
 
+#if defined(__aarch64__)
+#    define IMF_HAVE_NEON_AARCH64 1
+#endif
+
 extern "C" {
 #ifdef IMF_HAVE_SSE2
 #    include <emmintrin.h>
@@ -61,5 +65,19 @@ extern "C" {
 #endif
 
 }
+
+#include "OpenEXRConfigInternal.h"
+#ifdef OPENEXR_MISSING_ARM_VLD1
+/* Workaround for missing vld1q_f32_x2 in older gcc versions.  */
+
+__extension__ extern __inline float32x4x2_t
+    __attribute__ ((__always_inline__, __gnu_inline__, __artificial__))
+    vld1q_f32_x2 (const float32_t* __a)
+{
+    float32x4x2_t ret;
+    asm ("ld1 {%S0.4s - %T0.4s}, [%1]" : "=w"(ret) : "r"(__a) :);
+    return ret;
+}
+#endif
 
 #endif
