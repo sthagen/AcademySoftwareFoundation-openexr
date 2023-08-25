@@ -130,8 +130,14 @@ endif()
 option(BUILD_WEBSITE "Set ON to build website source")
 if (BUILD_WEBSITE AND NOT OPENEXR_IS_SUBPROJECT)
   add_subdirectory(website)
-else()
+endif()
+
+if (NOT OPENEXR_IS_SUBPROJECT)
   # Even if not building the website, still make sure the website example code compiles.
   add_subdirectory(website/src)
 endif()
 
+option(OPENEXR_BUILD_PYTHON "Set ON to build python bindings")
+if (OPENEXR_BUILD_PYTHON AND NOT OPENEXR_IS_SUBPROJECT)
+  add_subdirectory(src/wrappers/python)
+endif()
