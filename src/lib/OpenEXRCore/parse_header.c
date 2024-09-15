@@ -5,9 +5,12 @@
 
 #include "internal_file.h"
 
+#include "openexr_compression.h"
+
 #include "internal_attr.h"
 #include "internal_constants.h"
 #include "internal_structs.h"
+#include "internal_util.h"
 #include "internal_xdr.h"
 
 #include <limits.h>
@@ -1617,13 +1620,11 @@ check_populate_type (
     }
     else if (ctxt->strict_header)
     {
-        rv = ctxt->print_error (
+        ctxt->print_error (
             ctxt,
             EXR_ERR_INVALID_ATTR,
-            "attribute 'type': Invalid type string '%s'",
+            "attribute 'type': Unknown type string '%s'",
             outstr);
-        exr_attr_list_remove (ctxt, &(curpart->attributes), curpart->type);
-        curpart->type = NULL;
         if (curpart->storage_mode == EXR_STORAGE_LAST_TYPE)
             curpart->storage_mode = EXR_STORAGE_UNKNOWN;
     }
@@ -2160,6 +2161,9 @@ internal_exr_compute_tile_information (
         curpart->storage_mode == EXR_STORAGE_UNKNOWN)
         return EXR_ERR_SUCCESS;
 
+    if (ctxt->mode == EXR_CONTEXT_TEMPORARY && !curpart->tiles)
+        return EXR_ERR_SUCCESS;
+
     if (rebuild && (!curpart->dataWindow || !curpart->tiles))
         return EXR_ERR_SUCCESS;
 
@@ -2292,6 +2296,13 @@ internal_exr_compute_chunk_offset_size (exr_priv_part_t curpart)
     uint64_t                 w;
     int                      hasLineSample = 0;
 
+    if (curpart->storage_mode == EXR_STORAGE_UNKNOWN)
+    {
+        if (curpart->chunk_count > 0)
+            return curpart->chunk_count;
+        return 0;
+    }
+
     w = (uint64_t) (((int64_t) dw.max.x) - ((int64_t) dw.min.x) + 1);
 
     if (curpart->tiles)
@@ -2330,21 +2341,14 @@ internal_exr_compute_chunk_offset_size (exr_priv_part_t curpart)
 
         for (int c = 0; c < channels->num_channels; ++c)
         {
-            uint64_t xsamp  = (uint64_t) channels->entries[c].x_sampling;
-            uint64_t ysamp  = (uint64_t) channels->entries[c].y_sampling;
+            /* tiles do not allow x/y sub sampling */
             uint64_t cunpsz = 0;
             if (channels->entries[c].pixel_type == EXR_PIXEL_HALF)
                 cunpsz = 2;
             else
                 cunpsz = 4;
-            cunpsz *= (((uint64_t) tiledesc->x_size + xsamp - 1) / xsamp);
-            if (ysamp > 1)
-            {
-                hasLineSample = 1;
-                cunpsz *= (((uint64_t) tiledesc->y_size + ysamp - 1) / ysamp);
-            }
-            else
-                cunpsz *= (uint64_t) tiledesc->y_size;
+            cunpsz *= (uint64_t) tiledesc->x_size;
+            cunpsz *= (uint64_t) tiledesc->y_size;
             unpackedsize += cunpsz;
         }
         curpart->unpacked_size_per_chunk = unpackedsize;
@@ -2352,46 +2356,31 @@ internal_exr_compute_chunk_offset_size (exr_priv_part_t curpart)
     }
     else
     {
-        uint64_t linePerChunk, h;
-        switch (curpart->comp_type)
-        {
-            case EXR_COMPRESSION_NONE:
-            case EXR_COMPRESSION_RLE:
-            case EXR_COMPRESSION_ZIPS: linePerChunk = 1; break;
-            case EXR_COMPRESSION_ZIP:
-            case EXR_COMPRESSION_PXR24: linePerChunk = 16; break;
-            case EXR_COMPRESSION_PIZ:
-            case EXR_COMPRESSION_B44:
-            case EXR_COMPRESSION_B44A:
-            case EXR_COMPRESSION_DWAA: linePerChunk = 32; break;
-            case EXR_COMPRESSION_DWAB: linePerChunk = 256; break;
-            case EXR_COMPRESSION_LAST_TYPE:
-            default:
-                /* ERROR CONDITION */
-                return -1;
-        }
+        int linePerChunk, h;
+
+        linePerChunk = exr_compression_lines_per_chunk (curpart->comp_type);
+
+        curpart->lines_per_chunk = linePerChunk;
+
+        if (linePerChunk < 0) return -1;
 
         for (int c = 0; c < channels->num_channels; ++c)
         {
-            uint64_t xsamp  = (uint64_t) channels->entries[c].x_sampling;
-            uint64_t ysamp  = (uint64_t) channels->entries[c].y_sampling;
+            int xsamp  = channels->entries[c].x_sampling;
+            int ysamp  = channels->entries[c].y_sampling;
             uint64_t cunpsz = 0;
             if (channels->entries[c].pixel_type == EXR_PIXEL_HALF)
                 cunpsz = 2;
             else
                 cunpsz = 4;
-            cunpsz *= w / xsamp;
-            cunpsz *= linePerChunk;
+            cunpsz *= (uint64_t) compute_sampled_width (w, xsamp, dw.min.x);
+            cunpsz *= (uint64_t) compute_sampled_height (linePerChunk, ysamp, dw.min.y);
             if (ysamp > 1)
-            {
                 hasLineSample = 1;
-                if (linePerChunk > 1) cunpsz *= linePerChunk / ysamp;
-            }
             unpackedsize += cunpsz;
         }
 
         curpart->unpacked_size_per_chunk = unpackedsize;
-        curpart->lines_per_chunk         = ((int16_t) linePerChunk);
         curpart->chan_has_line_sampling  = ((int16_t) hasLineSample);
 
         h      = (uint64_t) ((int64_t) dw.max.y - (int64_t) dw.min.y + 1);
@@ -2446,9 +2435,10 @@ update_chunk_offsets (
             ctxt->print_error (
                 ctxt,
                 EXR_ERR_INVALID_ATTR,
-                "Invalid chunk count (%d) for part '%s', expect (%d)",
+                "Invalid chunk count (%d) for part '%s' (%d), expect (%d)",
                 curpart->chunk_count,
                 (curpart->name ? curpart->name->string->str : "<first>"),
+                p,
                 ccount);
             curpart->chunk_count = ccount;
         }
@@ -2673,6 +2663,42 @@ internal_exr_parse_header (exr_context_t ctxt)
             rv = EXR_ERR_SUCCESS;
         }
     } while (1);
+
+    if (rv == EXR_ERR_SUCCESS)
+    {
+        for ( int p = 1; p < ctxt->num_parts; ++p )
+        {
+            const char *mismatch[4] = { NULL, NULL, NULL, NULL };
+            int mismatchcount = 0;
+            exr_priv_part_t curp = ctxt->parts[p];
+
+            rv = internal_exr_validate_shared_attrs (ctxt,
+                                                     ctxt->parts[0],
+                                                     curp,
+                                                     p,
+                                                     mismatch,
+                                                     &mismatchcount);
+            if (rv != EXR_ERR_SUCCESS)
+            {
+                rv = ctxt->print_error (
+                    ctxt,
+                    rv,
+                    "Part %d (%s) has non-conforming shared attributes: %s%s%s%s%s%s%s",
+                    p, curp->name ? curp->name->string->str : "<missing name>",
+                    mismatch[0] ? mismatch[0] : "",
+                    mismatch[0] ? " " : "",
+                    mismatch[1] ? mismatch[1] : "",
+                    mismatch[1] ? " " : "",
+                    mismatch[2] ? mismatch[2] : "",
+                    mismatch[2] ? " " : "",
+                    mismatch[3] ? mismatch[3] : "");
+
+                // MultiPartInputFile would fail unconditionally
+                break;
+                //rv = EXR_ERR_SUCCESS;
+            }
+        }
+    }
 
     if (rv == EXR_ERR_SUCCESS) { rv = update_chunk_offsets (ctxt, &scratch); }
 
