@@ -1,4 +1,4 @@
-# cmake -B . -S ..       -DCMAKE_INSTALL_PREFIX=../_install       -DCMAKE_BUILD_TYPE=Release       -DOPENEXR_CXX_STANDARD=17       -DBUILD_SHARED_LIBS=ON       -DOPENEXR_ENABLE_THREADING=ON       -DOPENEXR_INSTALL_PKG_CONFIG=ON       -DOPENEXR_INSTALL_DOCS=ON       -DOPENEXR_BUILD_EXAMPLES=ON       -DOPENEXR_BUILD_TOOLS=ON       -DOPENEXR_FORCE_INTERNAL_IMATH=OFF       -DOPENEXR_FORCE_INTERNAL_DEFLATE=OFF       -DBUILD_TESTING=ON       -DOPENEXR_RUN_FUZZ_TESTS='OFF'       -DCMAKE_VERBOSE_MAKEFILE='ON'
+# cmake -B . -S ..       -DCMAKE_INSTALL_PREFIX=../_install       -DCMAKE_BUILD_TYPE=Release       -DOPENEXR_CXX_STANDARD=17       -DBUILD_SHARED_LIBS=OFF       -DOPENEXR_ENABLE_THREADING=ON       -DOPENEXR_INSTALL_PKG_CONFIG=ON       -DOPENEXR_INSTALL_DOCS=ON       -DOPENEXR_BUILD_EXAMPLES=ON       -DOPENEXR_BUILD_TOOLS=ON       -DOPENEXR_FORCE_INTERNAL_IMATH=OFF       -DOPENEXR_FORCE_INTERNAL_DEFLATE=OFF       -DBUILD_TESTING=ON       -DOPENEXR_RUN_FUZZ_TESTS='OFF'       -DCMAKE_VERBOSE_MAKEFILE='ON'
 bin/exr2aces
 bin/exrenvmap
 bin/exrheader
@@ -35,6 +35,7 @@ include/OpenEXR/ImfAcesFile.h
 include/OpenEXR/ImfArray.h
 include/OpenEXR/ImfAttribute.h
 include/OpenEXR/ImfBoxAttribute.h
+include/OpenEXR/ImfBytesAttribute.h
 include/OpenEXR/ImfCRgbaFile.h
 include/OpenEXR/ImfChannelList.h
 include/OpenEXR/ImfChannelListAttribute.h
@@ -161,26 +162,11 @@ lib64/cmake/OpenEXR/OpenEXRConfig.cmake
 lib64/cmake/OpenEXR/OpenEXRConfigVersion.cmake
 lib64/cmake/OpenEXR/OpenEXRTargets-release.cmake
 lib64/cmake/OpenEXR/OpenEXRTargets.cmake
-lib64/libIex-$MAJOR_$MINOR.so
-lib64/libIex-$MAJOR_$MINOR.so.$SOVERSION
-lib64/libIex-$MAJOR_$MINOR.so.$SOVERSION.$MAJOR.$MINOR.$PATCH
-lib64/libIex.so
-lib64/libIlmThread-$MAJOR_$MINOR.so
-lib64/libIlmThread-$MAJOR_$MINOR.so.$SOVERSION
-lib64/libIlmThread-$MAJOR_$MINOR.so.$SOVERSION.$MAJOR.$MINOR.$PATCH
-lib64/libIlmThread.so
-lib64/libOpenEXR-$MAJOR_$MINOR.so
-lib64/libOpenEXR-$MAJOR_$MINOR.so.$SOVERSION
-lib64/libOpenEXR-$MAJOR_$MINOR.so.$SOVERSION.$MAJOR.$MINOR.$PATCH
-lib64/libOpenEXR.so
-lib64/libOpenEXRCore-$MAJOR_$MINOR.so
-lib64/libOpenEXRCore-$MAJOR_$MINOR.so.$SOVERSION
-lib64/libOpenEXRCore-$MAJOR_$MINOR.so.$SOVERSION.$MAJOR.$MINOR.$PATCH
-lib64/libOpenEXRCore.so
-lib64/libOpenEXRUtil-$MAJOR_$MINOR.so
-lib64/libOpenEXRUtil-$MAJOR_$MINOR.so.$SOVERSION
-lib64/libOpenEXRUtil-$MAJOR_$MINOR.so.$SOVERSION.$MAJOR.$MINOR.$PATCH
-lib64/libOpenEXRUtil.so
+lib64/libIex-$MAJOR_$MINOR.a
+lib64/libIlmThread-$MAJOR_$MINOR.a
+lib64/libOpenEXR-$MAJOR_$MINOR.a
+lib64/libOpenEXRCore-$MAJOR_$MINOR.a
+lib64/libOpenEXRUtil-$MAJOR_$MINOR.a
 lib64/pkgconfig/OpenEXR.pc
 share/doc/OpenEXR/examples/deepExamples.cpp
 share/doc/OpenEXR/examples/deepExamples.h
